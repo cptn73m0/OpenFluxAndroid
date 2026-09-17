@@ -1,0 +1,65 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Android repo
+        uses: actions/checkout@v4
+        with:
+          path: android
+
+      - name: Checkout OpenFlux
+        uses: actions/checkout@v4
+        with:
+          repository: cptn73m0/OpenFlux
+          ref: main
+          path: openflux
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+          add-to-path: false
+
+      - name: Build arm64 binary
+        run: |
+          export ANDROID_NDK_HOME="${{ env.ANDROID_NDK_HOME }}"
+          if [ -z "$ANDROID_NDK_HOME" ]; then
+            export ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | head -1)
+          fi
+          echo "NDK: $ANDROID_NDK_HOME"
+          cd openflux
+          bash build_android.sh
+          mkdir -p $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a
+          cp output/android/arm64-v8a/openflux \
+            $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libp1npplydtransport.so
+          file $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libp1npplydtransport.so
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openflux-apk
+          path: android/app/build/outputs/apk/release/*.apk
