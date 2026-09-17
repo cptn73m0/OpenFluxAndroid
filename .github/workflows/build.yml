@@ -34,17 +34,22 @@ jobs:
 
       - name: Build arm64 binary
         run: |
-          export ANDROID_NDK_HOME="${{ env.ANDROID_NDK_HOME }}"
-          if [ -z "$ANDROID_NDK_HOME" ]; then
-            export ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | head -1)
+          NDK="${{ env.ANDROID_NDK_HOME }}"
+          if [ -z "$NDK" ]; then
+            NDK=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | head -1)
           fi
-          echo "NDK: $ANDROID_NDK_HOME"
+          echo "NDK: $NDK"
+          export GOARCH=arm64
+          export GOOS=android
+          export CGO_ENABLED=1
+          export CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
+          export CXX="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang++"
+          export CGO_CFLAGS="-march=armv8-a -O2"
           cd openflux
-          bash build_android.sh
+          go build -v             -ldflags="-s -w -linkmode external -extldflags '-Wl,-rpath,/system/lib64 -Wl,-rpath,/vendor/lib64' -checklinkname=0"             -o libp1npplydtransport.so .
+          file libp1npplydtransport.so
           mkdir -p $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a
-          cp output/android/arm64-v8a/openflux \
-            $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libp1npplydtransport.so
-          file $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/libp1npplydtransport.so
+          cp libp1npplydtransport.so $GITHUB_WORKSPACE/android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Set up JDK
         uses: actions/setup-java@v4
